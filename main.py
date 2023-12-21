@@ -159,30 +159,6 @@ class PaintApp:
             self.canvas.create_oval(self.ix - radius, self.iy - radius, self.ix + radius, self.iy + radius,
                                     outline=self.rgb_to_hex(self.active_color), tags="temp_circle")
 
-
-    def enable_cercle(self):
-        self.set_active_button(self.circle, "Cercle")
-        self.canvas.bind("<ButtonPress-1>", self.set_start_point)
-        self.canvas.bind("<B1-Motion>", self.draw_temp_circle)
-        self.canvas.bind("<ButtonRelease-1>", self.draw_circle_on_release)
-
-    def draw_circle_on_release(self, event):
-        if self.active_tool == "Cercle":
-            x, y = event.x, event.y
-            radius = max(abs(self.ix - x), abs(self.iy - y))
-            self.canvas.create_oval(self.ix - radius, self.iy - radius, self.ix + radius, self.iy + radius,
-                                    outline=self.rgb_to_hex(self.active_color))
-            self.drawing = False
-            self.canvas.delete("temp_circle")  # Supprime le cercle temporaire à la fin du dessin
-
-    # ... (votre code existant)
-
-    def draw_rectangle(self, start_x, start_y, end_x, end_y):
-        color = self.active_color
-        self.page_blanche = self.page_blanche.copy()  # Créez une copie de la page pour dessiner sans modifier l'original
-        cv2.rectangle(self.page_blanche, (start_x, start_y), (end_x, end_y), color, -1)
-        self.update_canvas()
-
     def rotate_image(self, angle):
         self.page_blanche = cv2.rotate(self.page_blanche, angle)  # Rotation de l'image
         self.update_canvas()
@@ -251,9 +227,6 @@ class PaintApp:
         self.set_active_button(self.erasing_button, "Effacer")
 
     def set_active_button(self, button, tool):
-        #if self.active_button:
-        #    self.active_button.config(relief=tk.RAISED)
-        #button.config(relief=tk.SUNKEN)
         self.active_button = button
         self.active_tool = tool
 
