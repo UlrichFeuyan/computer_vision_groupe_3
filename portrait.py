@@ -4,10 +4,10 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 
 class FaceDetectorPortrait:
-    def __init__(self, window, window_title):
+    def __init__(self, window, drawing_app,window_title):
         self.window = window
         self.window.title(window_title)
-
+        self.drawing_app = drawing_app
         self.face_detector_path = "haarcascade_frontalface_default.xml"
         self.face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + self.face_detector_path)
 
@@ -22,17 +22,22 @@ class FaceDetectorPortrait:
         self.btn_stop = ttk.Button(window, text="Stop", command=self.stop, state="disabled")
         self.btn_stop.pack(pady=10)
 
+        self.btn_save = ttk.Button(window, text="Save", command=self.save_frame, state="disabled")
+        self.btn_save.pack(pady=10)
+
         self.processing = False
         self.update_frame()
 
     def start(self):
         self.btn_start["state"] = "disabled"
         self.btn_stop["state"] = "normal"
+        self.btn_save["state"] = "normal"
         self.processing = True
 
     def stop(self):
         self.btn_start["state"] = "normal"
         self.btn_stop["state"] = "disabled"
+        self.btn_save["state"] = "disable"
         self.processing = False
 
     def update_frame(self):
@@ -69,6 +74,15 @@ class FaceDetectorPortrait:
 
         blurred_img = cv2.GaussianBlur(img, (kW, kH), 0)
         return blurred_img
+
+    def save_frame(self):
+        ret, frame = self.cap.read()
+        if ret:
+            cv2.imwrite("saved_frame.png", frame)
+            blurred_faces = self.blur_faces(frame)
+            cv2.imwrite("blurred_faces.png", blurred_faces)
+            self.drawing_app.load_webcam_image(blurred_faces)
+
 
     def display_frame(self, frame):
         # Display the result in the Tkinter window

@@ -59,7 +59,7 @@ class PaintApp:
     def open_live_draw(self):
         self.live_draw = LiveDraw(tk.Toplevel(self.root), "Live Drawing")
     def open_webcam_portrait(self):
-        self.portrait_detector = FaceDetectorPortrait(tk.Toplevel(self.root), "Face detector")
+        self.portrait_detector = FaceDetectorPortrait(tk.Toplevel(self.root), self,"Face detector")
 
     def load_webcam_image(self, frame):
         # Convertir l'image de la webcam (frame) en un format compatible avec votre zone de dessin
