@@ -1,155 +1,203 @@
 import numpy as np
 import cv2
 from collections import deque
+import tkinter as tk
+from PIL import Image, ImageTk, ImageGrab
 
 
-# The upper and lower boundaries for a color to be considered "Blue"
-blueLower = np.array([105, 50, 50])
-blueUpper = np.array([125, 255, 255])
+class LiveDraw:
+    def __init__(self, window, window_title):
+        self.window = window
+        self.window.title(window_title)
 
-#A 5x5 kernel for morphological transformations - erosion,dilation
-kernel = np.ones((5, 5), np.uint8)
+        self.camera = cv2.VideoCapture(0)
+        self.kernel = np.ones((5, 5), np.uint8)
+        self.colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
+        self.color_index = 0
 
-# Setup deques to store separate colors in separate arrays
-bpoints = [deque(maxlen=512)]
-gpoints = [deque(maxlen=512)]
-rpoints = [deque(maxlen=512)]
-ypoints = [deque(maxlen=512)]
+        self.bpoints = [deque(maxlen=512)]
+        self.gpoints = [deque(maxlen=512)]
+        self.rpoints = [deque(maxlen=512)]
+        self.ypoints = [deque(maxlen=512)]
 
-bindex = 0
-gindex = 0
-rindex = 0
-yindex = 0
+        self.bindex = 0
+        self.gindex = 0
+        self.rindex = 0
+        self.yindex = 0
 
-#Different colors represented in (B,G,R) format
-colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
-colorIndex = 0
+        self.paint_interface = np.zeros((471, 636, 3)) + 255
+        self.create_paint_interface()
 
-#  the Paint interface
-Paint = np.zeros((471,636,3)) + 255
-Paint = cv2.rectangle(Paint, (40,41), (140,105), (0,0,0), 2)
-Paint = cv2.rectangle(Paint, (160,41), (255,105), colors[0], -1)
-Paint = cv2.rectangle(Paint, (275,41), (370,105), colors[1], -1)
-Paint = cv2.rectangle(Paint, (390,41), (485,105), colors[2], -1)
-Paint = cv2.rectangle(Paint, (505,41), (600,105), colors[3], -1)
-cv2.putText(Paint, "CLEAR ALL", (49, 73), cv2.FONT_ITALIC, 0.5, (0, 0, 0), 2, cv2.LINE_AA)
-cv2.putText(Paint, "BLUE", (185, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-cv2.putText(Paint, "GREEN", (298, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-cv2.putText(Paint, "RED", (420, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-cv2.putText(Paint, "YELLOW", (520, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150,150,150), 2, cv2.LINE_AA)
+        self.canvas = tk.Canvas(window)
+        self.canvas.pack(side=tk.LEFT)
 
-cv2.namedWindow('Paint', cv2.WINDOW_AUTOSIZE)
+        self.video_canvas = tk.Canvas(window)
+        self.video_canvas.pack(side=tk.RIGHT)
 
-# Load the video
-camera = cv2.VideoCapture(0)
+        self.update()
 
-# Keep looping
-while True:
-    # Grab the current Paint
-    (grabbed, frame) = camera.read()
-    frame = cv2.flip(frame, 1)
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        self.save_button = tk.Button(self.window, text="Save Drawing", command=self.save_drawing)
+        self.save_button.pack(side=tk.BOTTOM,)
 
-    # the frame interface
-    frame = cv2.rectangle(frame, (40,41), (140,105), (122,122,122), -1)
-    frame = cv2.rectangle(frame, (160,41), (255,105), colors[0], -1)
-    frame = cv2.rectangle(frame, (275,41), (370,105), colors[1], -1)
-    frame = cv2.rectangle(frame, (390,41), (485,105), colors[2], -1)
-    frame = cv2.rectangle(frame, (505,41), (600,105), colors[3], -1)
-    cv2.putText(frame, "CLEAR ALL", (49, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, "BLUE", (185, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, "GREEN", (298, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, "RED", (420, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, "YELLOW", (520, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150,150,150), 2, cv2.LINE_AA)
+    def save_drawing(self):
+        try:
+            # Get the content of the canvas and convert it to an image
+            x = self.window.winfo_rootx() + self.canvas.winfo_x()
+            y = self.window.winfo_rooty() + self.canvas.winfo_y()
+            x1 = x + self.canvas.winfo_width()
+            y1 = y + self.canvas.winfo_height()
 
-    # Check to see if we have reached the end of the video
-    if not grabbed:
-        break
+            drawing_image = ImageGrab.grab(bbox=(x, y, x1, y1))
 
-    # Determine which pixels fall within the blue boundaries
-    blueMask = cv2.inRange(hsv, blueLower, blueUpper)
+            # Save the image
+            drawing_image.save("drawing_output.png")
+            print("Drawing saved as drawing_output.png")
+        except Exception as e:
+            print("Error in save_drawing:", str(e))
 
-    #Blur the image using morphological transformations
-    blueMask = cv2.erode(blueMask, kernel, iterations=2)
-    blueMask = cv2.morphologyEx(blueMask, cv2.MORPH_OPEN, kernel)
-    blueMask = cv2.dilate(blueMask, kernel, iterations=1)
+    def create_paint_interface(self):
+        self.paint_interface = cv2.rectangle(self.paint_interface, (40, 41), (140, 105), (0, 0, 0), 2)
+        for i, color in enumerate(self.colors):
+            start_x, end_x = 160 + i * 115, 255 + i * 115
+            self.paint_interface = cv2.rectangle(self.paint_interface, (start_x, 41), (end_x, 105), color, -1)
+            cv2.putText(self.paint_interface, self.color_name(i), (start_x + 10, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Find contours in the image
-    (cnts, _) = cv2.findContours(blueMask.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-    center = None
+        cv2.putText(self.paint_interface, "CLEAR ALL", (49, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2, cv2.LINE_AA)
+        self.update_tkinter_image()
 
-    # Check to see if any contours were found
-    if len(cnts) > 0:
-    	# Sort the contours and find the largest one
-    	# we will assume this contour correspondes to the area of the biggest circle forming blue
-        cnt = sorted(cnts, key = cv2.contourArea, reverse = True)[0]
-        # Get the radius of the enclosing circle around the found contour
-        ((x, y), radius) = cv2.minEnclosingCircle(cnt)
-        # Draw the circle around the contour
-        cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-        # Get the moments to calculate the center of the contour (in this case Circle)
-        M = cv2.moments(cnt)
-        center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
+    def color_name(self, index):
+        color_names = ["BLUE", "GREEN", "RED", "YELLOW"]
+        return color_names[index]
 
-        if center[1] <= 105:
-            if 40 <= center[0] <= 140: # Clear All
-                bpoints = [deque(maxlen=512)]
-                gpoints = [deque(maxlen=512)]
-                rpoints = [deque(maxlen=512)]
-                ypoints = [deque(maxlen=512)]
+    def update_tkinter_image(self):
+        img = np.uint8(self.paint_interface)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(img)
+        self.photo = ImageTk.PhotoImage(image=img)
+        if hasattr(self, 'canvas'):
+            self.canvas.config(width=self.photo.width(), height=self.photo.height())
+            self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
+            self.canvas.image = self.photo
 
-                bindex = 0
-                gindex = 0
-                rindex = 0
-                yindex = 0
+        #print("Tkinter image updated successfully")
 
-                Paint[107:,:,:] = 255
-            elif 160 <= center[0] <= 255:
-                    colorIndex = 0 # Blue
-            elif 275 <= center[0] <= 370:
-                    colorIndex = 1 # Green
-            elif 390 <= center[0] <= 485:
-                    colorIndex = 2 # Red
-            elif 505 <= center[0] <= 600:
-                    colorIndex = 3 # Yellow
-        else :
-            if colorIndex == 0:
-                bpoints[bindex].appendleft(center)
-            elif colorIndex == 1:
-                gpoints[gindex].appendleft(center)
-            elif colorIndex == 2:
-                rpoints[rindex].appendleft(center)
-            elif colorIndex == 3:
-                ypoints[yindex].appendleft(center)
-    # Append the next deque when no contours are detected
-    else:
-        bpoints.append(deque(maxlen=512))
-        bindex += 1
-        gpoints.append(deque(maxlen=512))
-        gindex += 1
-        rpoints.append(deque(maxlen=512))
-        rindex += 1
-        ypoints.append(deque(maxlen=512))
-        yindex += 1
+    def update_video_feed(self):
+        _, frame = self.camera.read()
+        frame = cv2.flip(frame, 1)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        frame = cv2.rectangle(frame, (40, 41), (140, 105), (122, 122, 122), -1)
+        for i, color in enumerate(self.colors):
+            start_x, end_x = 160 + i * 115, 255 + i * 115
+            frame = cv2.rectangle(frame, (start_x, 41), (end_x, 105), color, -1)
+            cv2.putText(frame, self.color_name(i), (start_x + 10, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255),
+                        2, cv2.LINE_AA)
+        cv2.putText(frame, "CLEAR ALL", (49, 73), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Draw lines of all the colors
-    points = [bpoints, gpoints, rpoints, ypoints]
-    for i in range(len(points)):
-        for j in range(len(points[i])):
-            for k in range(1, len(points[i][j])):
-                if points[i][j][k - 1] is None or points[i][j][k] is None:
-                    continue
-                cv2.line(frame, points[i][j][k - 1], points[i][j][k], colors[i], 2)
-                cv2.line(Paint, points[i][j][k - 1], points[i][j][k], colors[i], 2)
+        blue_mask = self.color_mask(hsv, lower=(105, 50, 50), upper=(125, 255, 255))
+        blue_mask = cv2.erode(blue_mask, self.kernel, iterations=2)
+        blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, self.kernel)
+        blue_mask = cv2.dilate(blue_mask, self.kernel, iterations=1)
 
-    # Show the frame and the Paint image
-    cv2.imshow("Tracking", frame)
-    cv2.imshow("Painter", Paint)
+        cnts, _ = cv2.findContours(blue_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        center = None
 
-	# If the 'q' key is pressed, stop the loop
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+        if cnts:
+            cnt = sorted(cnts, key=cv2.contourArea, reverse=True)[0]
+            ((x, y), radius) = cv2.minEnclosingCircle(cnt)
+            cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+            M = cv2.moments(cnt)
+            center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
 
-# Cleanup the camera and close any open windows
-camera.release()
-cv2.destroyAllWindows()
+            if center[1] <= 105:
+                if 40 <= center[0] <= 140:  # Clear All
+                    self.clear_all()
+                elif 160 <= center[0] <= 255:
+                    self.color_index = 0  # Blue
+                elif 275 <= center[0] <= 370:
+                    self.color_index = 1  # Green
+                elif 390 <= center[0] <= 485:
+                    self.color_index = 2  # Red
+                elif 505 <= center[0] <= 600:
+                    self.color_index = 3  # Yellow
+            else:
+                self.draw_points(center)
+
+        self.update_tkinter_image()
+
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            self.stop()
+        self.window.update()
+
+        #if self.processing:
+        self.window.after(10, self.update)
+
+        points = [self.bpoints, self.gpoints, self.rpoints, self.ypoints]
+        for i in range(len(points)):
+            for j in range(len(points[i])):
+                for k in range(1, len(points[i][j])):
+                    if points[i][j][k - 1] is None or points[i][j][k] is None:
+                        continue
+                    cv2.line(frame, points[i][j][k - 1], points[i][j][k], self.colors[i], 2)
+                    cv2.line(self.paint_interface, points[i][j][k - 1], points[i][j][k], self.colors[i], 2)
+
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(img)
+        self.video_photo = ImageTk.PhotoImage(image=img)
+
+        if hasattr(self, 'video_canvas'):
+            self.video_canvas.config(width=self.video_photo.width(), height=self.video_photo.height())
+            self.video_canvas.create_image(0, 0, image=self.video_photo, anchor=tk.NW)
+            self.video_canvas.image = self.video_photo
+
+        self.update_tkinter_image()
+
+    def update(self):
+        self.update_video_feed()
+        self.update_tkinter_image()
+
+        self.window.after(10, self.update)
+
+    def color_mask(self, hsv, lower, upper):
+        return cv2.inRange(hsv, np.array(lower), np.array(upper))
+
+    def draw_points(self, center):
+        points = [self.bpoints, self.gpoints, self.rpoints, self.ypoints]
+        selected_points = points[self.color_index]
+        selected_index = [self.bindex, self.gindex, self.rindex, self.yindex][self.color_index]
+
+        if self.color_index == 3:
+            selected_points[selected_index].appendleft(center)
+        else:
+            selected_points[selected_index].appendleft(center)
+    def clear_all(self):
+        self.bpoints = [deque(maxlen=512)]
+        self.gpoints = [deque(maxlen=512)]
+        self.rpoints = [deque(maxlen=512)]
+        self.ypoints = [deque(maxlen=512)]
+
+        self.bindex = 0
+        self.gindex = 0
+        self.rindex = 0
+        self.yindex = 0
+
+        self.paint_interface[107:, :, :] = 255
+        self.update_tkinter_image()
+
+    def start(self):
+        #self.processing = True
+        #self.camera = cv2.VideoCapture(0)
+        #self.kernel = np.ones((5, 5), np.uint8)
+        self.update()
+
+    def stop(self):
+        if self.camera is None:
+            #self.processing = False
+            self.camera.release()
+            cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = LiveDraw(root, "Paint App")
+    app.start()
+    root.mainloop()

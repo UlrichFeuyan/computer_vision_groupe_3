@@ -6,13 +6,15 @@ from tkinter.ttk import *
 from collections import deque
 import cv2
 import numpy as np
-from wcam import Webcam
-
-
+from snapshot import FaceDetector
+from portrait import FaceDetectorPortrait
+from live_draw import LiveDraw
 
 class PaintApp:
     def __init__(self, root, width, height):
         self.root = root
+        self.ico = tk.PhotoImage(file='images/color.png')
+        self.root.iconphoto(True, self.ico)
         self.width = width
         self.height = height
         self.root.minsize(self.width,self.height)
@@ -45,14 +47,19 @@ class PaintApp:
 
         self.canvas.bind("<B1-Motion>", self.draw_erase_line)
         self.canvas.bind("<ButtonRelease-1>", self.disable_drawing_erasing)
-
+        self.enable_drawing()
 
 
     def select_size(self, size):
         self.selected_size = size
 
     def open_webcam(self):
-        self.webcam = Webcam(tk.Toplevel(self.root),self)  # Crée une instance de la webcam dans une nouvelle fenêtre
+        self.face_detector = FaceDetector(tk.Toplevel(self.root), self)  # Crée une instance de la webcam dans une nouvelle fenêtre
+
+    def open_live_draw(self):
+        self.live_draw = LiveDraw(tk.Toplevel(self.root), "Live Drawing")
+    def open_webcam_portrait(self):
+        self.portrait_detector = FaceDetectorPortrait(tk.Toplevel(self.root), "Face detector")
 
     def load_webcam_image(self, frame):
         # Convertir l'image de la webcam (frame) en un format compatible avec votre zone de dessin
@@ -85,11 +92,11 @@ class PaintApp:
 
         self.brush_sizes = [1, 3, 9, 13, 17, 21, 30]
         self.selected_size = self.brush_sizes[0]
-        self.brush_size_label = Label(self.tool_frame, text="Epaisseur")
+        self.brush_size_label = Label(self.tool_frame, text="Size")
         self.brush_size_label.grid(row = 1, column = 0)
-        self.brush_size_label = Label(self.tool_frame, text="Gomme")
+        self.brush_size_label = Label(self.tool_frame, text="Eraser")
         self.brush_size_label.grid(row=1, column=1)
-        self.brush_size_label = Label(self.tool_frame, text="Couleur")
+        self.brush_size_label = Label(self.tool_frame, text="Color")
         self.brush_size_label.grid(row=1, column=2)
 
         self.brush_size_combobox = Combobox(self.tool_frame, values=self.brush_sizes, state="readonly")
@@ -100,11 +107,11 @@ class PaintApp:
 
         self.erasing_icon = tk.PhotoImage(file='images/eraser.png')
         self.erasing_button = Button(self.tool_frame, image=self.erasing_icon, command=self.enable_erasing)
-        self.erasing_button.grid(row = 0, column = 1)
+        self.erasing_button.grid(row = 0, column = 1, padx = 5)
 
         self.color_icon = tk.PhotoImage(file='images/color.png')#.subsample(13, 13)
         self.color_button = Button(self.tool_frame, image=self.color_icon, command=self.choose_color)
-        self.color_button.grid(row = 0, column = 2)
+        self.color_button.grid(row = 0, column = 2 , padx = 5)
 
         self.cam = tk.PhotoImage(file='images/camera.png')
         self.live = tk.PhotoImage(file='images/live_draw.png')
@@ -114,37 +121,43 @@ class PaintApp:
         self.rg = tk.PhotoImage(file='images/rotate_right.png')
         self.tri = tk.PhotoImage(file='images/triangle.png')
         self.cir = tk.PhotoImage(file='images/circle.png')
+        self.portrait = tk.PhotoImage(file='images/portrait.png')
 
-        Button(self.image_frame, image= self.fill, command=self.apply_tint).grid(row = 0, column = 0)
-        Button(self.image_frame, image= self.lf, command= lambda: self.rotate_image(cv2.ROTATE_90_COUNTERCLOCKWISE)).grid(row = 0, column = 1)
-        Button(self.image_frame, image= self.rg, command= lambda: self.rotate_image(cv2.ROTATE_90_CLOCKWISE)).grid(row=0, column=2)
-        Button(self.image_frame, text="Flouter", image=self.blur, command=self.apply_blur_filter).grid(row=0, column=3)
+        Button(self.image_frame, image= self.fill, command=self.apply_tint).grid(row = 0, column = 0, padx = 5)
+        Button(self.image_frame, image= self.lf, command= lambda: self.rotate_image(cv2.ROTATE_90_COUNTERCLOCKWISE)).grid(row = 0, column = 1, padx = 5)
+        Button(self.image_frame, image= self.rg, command= lambda: self.rotate_image(cv2.ROTATE_90_CLOCKWISE)).grid(row=0, column=2, padx = 5)
+        Button(self.image_frame, text="Flouter", image=self.blur, command=self.apply_blur_filter).grid(row=0, column=3, padx = 5)
         #self.circle = Button(self.image_frame, image=self.cir, command=lambda: self.enable_cercle()).grid(row=0, column=4)
         #triangle = Button(self.image_frame, image=self.tri, command=lambda: self.set_active_shape("Rectangle")).grid(row=0, column=5)
 
-        Button(self.other_frame, image= self.cam, command= self.open_webcam).grid(row = 0, column = 0)
-        Button(self.other_frame, image = self.live, command= open('live_draw.py')).grid(row = 0, column = 1)
+        Button(self.other_frame, image= self.cam, command = self.open_webcam).grid(row = 0, column = 0, padx = 5)
+        Button(self.other_frame, image=self.portrait, command=self.open_webcam_portrait).grid(row=0, column=1, padx = 5)
+
+        Button(self.other_frame, image = self.live, command=self.open_live_draw).grid(row = 0, column = 2, padx = 5)
 
 
 
 
-        self.brush_size_label = Label(self.image_frame, text="Teindre")
+        self.brush_size_label = Label(self.image_frame, text="Fill")
         self.brush_size_label.grid(row=1, column=0)
-        self.brush_size_label = Label(self.image_frame, text="Droite")
+        self.brush_size_label = Label(self.image_frame, text="Left")
         self.brush_size_label.grid(row=1, column=1)
-        self.brush_size_label = Label(self.image_frame, text="Gauche")
+        self.brush_size_label = Label(self.image_frame, text="Right")
         self.brush_size_label.grid(row=1, column=2)
-        self.brush_size_label = Label(self.image_frame, text="Flouter")
+        self.brush_size_label = Label(self.image_frame, text="Blur")
         self.brush_size_label.grid(row=1, column=3)
         #self.brush_size_label = Label(self.image_frame, text="Cercle")
         #self.brush_size_label.grid(row=1, column=4)
         #self.brush_size_label = Label(self.image_frame, text="Triangle")
         #self.brush_size_label.grid(row=1, column=5)
 
+
         self.brush_size_label = Label(self.other_frame, text='Photo')
         self.brush_size_label.grid(row=1, column=0)
-        self.brush_size_label = Label(self.other_frame, text="Dessin live")
+        self.brush_size_label = Label(self.other_frame, text="Portrait")
         self.brush_size_label.grid(row=1, column=1)
+        self.brush_size_label = Label(self.other_frame, text="Live Drawing")
+        self.brush_size_label.grid(row=1, column=2)
 
     def set_active_shape(self, shape):
         self.active_shape = shape
@@ -184,24 +197,24 @@ class PaintApp:
         self.menu_bar = tk.Menu(root)
 
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.file_menu.add_command(label="Page vide", command=self.clear_canvas)
+        self.file_menu.add_command(label="Empty page", command=self.clear_canvas)
         self.file_menu.add_separator()
 
         self.file_submenu = tk.Menu(self.file_menu, tearoff=0)
-        self.file_submenu.add_command(label="Insérer une image", command=self.insert_image)
-        self.file_menu.add_cascade(label="Nouveau", menu=self.file_submenu)
+        self.file_submenu.add_command(label="Insert an image", command=self.insert_image)
+        self.file_menu.add_cascade(label="New image", menu=self.file_submenu)
         self.file_menu.add_separator()
 
         self.save_submenu = tk.Menu(self.file_menu, tearoff=0)
-        self.save_submenu.add_command(label="Enregistrer", command=self.save_work)
-        self.file_menu.add_cascade(label="Enregistrer le travail", menu=self.save_submenu)
+        self.save_submenu.add_command(label="Save under", command=self.save_work)
+        self.file_menu.add_cascade(label="Save work", menu=self.save_submenu)
         self.file_menu.add_separator()
 
-        self.file_menu.add_command(label="Quitter", command=root.quit)
+        self.file_menu.add_command(label="Quit", command=root.quit)
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
 
         self.edit_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.edit_menu.add_command(label="Effacer tout", command=self.clear_canvas)
+        self.edit_menu.add_command(label="Clear all", command=self.clear_canvas)
         self.menu_bar.add_cascade(label="Edit", menu=self.edit_menu)
 
         self.about_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -221,10 +234,12 @@ class PaintApp:
         self.canvas.itemconfig(self.image_item, image=self.photo)
 
     def enable_drawing(self):
-        self.set_active_button(self.drawing_button, "Dessiner")
+        self.change_cursor("cross")
+        self.set_active_button(self.drawing_button, "Draw")
 
     def enable_erasing(self):
-        self.set_active_button(self.erasing_button, "Effacer")
+        self.change_cursor("target")
+        self.set_active_button(self.erasing_button, "Erase")
 
     def set_active_button(self, button, tool):
         self.active_button = button
@@ -256,18 +271,22 @@ class PaintApp:
             cv2.imwrite(file_path, cv2.cvtColor(self.page_blanche, cv2.COLOR_RGB2BGR))
 
     def show_about_info(self):
-        about_text = "Cette application a été créée pour dessiner et effacer."
+        about_text = ("Cette application a été créée dans le cadre d'un séminaire sur le computing\n\nIl s'agit d'une application de dessin similaire a Paint"
+                      "\nLes participants sont les suivants : \n\n"
+                      "--Lontsi Mbogne Gérald\n"
+                      "--Mambou Fonam Brandon Duhan (+237652769828)\n"
+                      "--Nnomoko Armel Cedric")
         messagebox.showinfo("À propos", about_text)
 
-    def change_cursor_to_erase(self, event):
-        self.root.config(cursor="X_cursor")
+    def change_cursor(self, name):
+        self.root.config(cursor = name)
 
     def draw_erase_line(self, event):
         if self.active_tool:
             x, y = event.x, event.y
             if self.ix == -1 and self.iy == -1:
                 self.ix, self.iy = x, y
-            if self.active_tool == "Effacer":
+            if self.active_tool == "Erase":
                 color = (255, 255, 255)
             else:
                 color = self.active_color
